@@ -33,12 +33,11 @@ class TetraJetMatMul(torch.autograd.Function):
         
         if ctx.needs_input_grad[1] is True:
             fq_grad_W = torch.matmul(
-                            ctx.CastMXFP4(grad_Y.reshape(-1, grad_Y.shape[-1]).t(), Blocking.ROWWISE), 
-                            ctx.CastMXFP4(X.reshape(-1, X.shape[-1]), Blocking.COLWISE))
-            # reshaping to take care BxL, IC, might be inefficient for BxIC?
+                            ctx.CastMXFP4(grad_Y.view(-1, grad_Y.shape[-1]).t(), Blocking.ROWWISE), 
+                            ctx.CastMXFP4(X.view(-1, X.shape[-1]), Blocking.COLWISE))
 
         if ctx.has_bias and ctx.needs_input_grad[2] is True:
-            grad_b = grad_Y.sum(dim=0) # Original bias shape (OC,)
+            grad_b = grad_Y.sum(dim=0)
 
         return fq_grad_X, fq_grad_W, grad_b, None
     
@@ -49,13 +48,18 @@ class TetraJetLinear(torch.nn.Linear):
         self.CastMXFP4 = MXFP4Simulator(ScalerImpl.TetraJet)
 
     def forward(self, input):
-        if len(input.shape) == 3:
+        n_dim = len(input.shape)
+        if n_dim == 3:
             B, L, E = input.shape
-            out =  TetraJetMatMul.apply(input.reshape(-1, E), self.weight, self.bias, self.CastMXFP4)
-            return out.reshape(B, L, -1)
-        else:
+            Y =  TetraJetMatMul.apply(input.view(-1, E), self.weight, self.bias, self.CastMXFP4)
+            return Y.view(B, L, -1)
+
+        elif n_dim == 2:
             return TetraJetMatMul.apply(input, self.weight, self.bias, self.CastMXFP4)
 
+        else:
+            raise NotImplementedError
+        
     def extra_repr(self) -> str:
         b_str = "T" if self.bias is not None else "F"
         return f"IC={self.in_features}, OC={self.out_features}, b={b_str}"

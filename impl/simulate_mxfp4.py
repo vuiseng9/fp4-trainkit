@@ -50,25 +50,32 @@ class MXFP4Simulator:
         if tensor.dtype not in [torch.float32, torch.bfloat16]:
             raise ValueError("Tensor must be of type FP32 or BF16")
 
-        amax = tensor.abs().max(-1, keepdim=True).values
+        absmax = tensor.abs().max(-1, keepdim=True).values
 
         match self.scaler_impl:
             case ScalerImpl.MX:
                 # OCP MX baseline
-                scaler_exponent = torch.floor( torch.log2(amax/self.MAX_POWER_OF_TWO) )
+                scaler_exponent = torch.floor_( 
+                                    torch.log2_( 
+                                        absmax.div_(self.MAX_POWER_OF_TWO)))
             
             case ScalerImpl.TetraJet:
-                scaler_exponent = torch.ceil( torch.log2( 2*amax/(self.MAX_VAL-self.MIN_VAL) ) ) 
+                scaler_exponent = torch.ceil_(
+                                    torch.log2_( 
+                                        absmax.mul_(2).div_(self.MAX_VAL-self.MIN_VAL)))
 
             case ScalerImpl.NV_MXFP8_RECIPE:
                 # Mishra's MXFP8 Recipe
-                scaler_exponent = torch.ceil( torch.log2(amax/self.MAX_VAL) )
+                scaler_exponent = torch.ceil_(
+                                    torch.log2_(
+                                        absmax.div_(self.MAX_VAL)))
 
             case _:
                 raise NotImplementedError(f"No default impl: {impl}")
         
-        scaler_exponent = scaler_exponent.clamp(self.SCALER_E_MIN, self.SCALER_E_MAX)
-        scaler = 2**scaler_exponent
+        scaler_exponent.clamp_(self.SCALER_E_MIN, self.SCALER_E_MAX)
+        
+        scaler = scaler_exponent.exp2_()
         return scaler #power of two value
 
     def emulate(self, tensor,  blocking_dim):        
@@ -90,7 +97,7 @@ class MXFP4Simulator:
 
         # reshape tensor to (r, c/K, K) for blocking
         r, c = tensor.shape
-        tensor = tensor.reshape(r, -1, self.K)
+        tensor = tensor.view(r, -1, self.K)
         scaler = self.get_e8m0_scaler(tensor)
         
         # scaled tensor 
@@ -101,7 +108,8 @@ class MXFP4Simulator:
         scaled_tensor = scaled_tensor.abs()
 
         # find E2 (note we that we avoid redundant bias by baking in bias beforehand)
-        e = torch.floor(torch.log2(scaled_tensor)).clamp(self.SCALER_E_MIN, self.SCALER_E_MAX) 
+        e = torch.floor(torch.log2(scaled_tensor)).clamp(self.SCALER_E_MIN, self.SCALER_E_MAX)
+
         # find M1
         m = (scaled_tensor / (2**e)).clamp(self.M_MIN, self.M_MAX) # mantissa can only be 0, 0.5, 1.0, 1.5 for FP4-E2M1
 
@@ -111,7 +119,7 @@ class MXFP4Simulator:
         # Reconstruct value in input datatype
         # FP4-E2M1 = (-1)^sign * 2**e * m_quantized
         emulated_tensor = scaler * (sign * 2**e * m_quantized)
-        emulated_tensor = emulated_tensor.reshape(r, -1) # relayout as original
+        emulated_tensor = emulated_tensor.view(r, -1) # relayout as original
 
         if blocking_dim == Blocking.COLWISE:
             emulated_tensor = emulated_tensor.t()
