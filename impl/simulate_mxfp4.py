@@ -25,7 +25,6 @@ class MXFP4Simulator:
     MAX_POWER_OF_TWO: ClassVar[int] = 2 ** E_MAX # 2^(3-1)
     MIN_VAL: ClassVar[float] = -6.0 # -1 x 2^E_MAX × base2(1.1)
     MAX_VAL: ClassVar[float] =  6.0 # +1 x 2^E_MAX × base2(1.1)
-    MANTISSA_BUCKETS: ClassVar[torch.Tensor] = torch.tensor([0.0, 0.5, 1.0, 1.5])
     M_MIN: ClassVar[float] = 0.0
     M_MAX: ClassVar[float] = 1.5
 
@@ -106,8 +105,8 @@ class MXFP4Simulator:
         # find M1
         m = (scaled_tensor / (2**e)).clamp(self.M_MIN, self.M_MAX) # mantissa can only be 0, 0.5, 1.0, 1.5 for FP4-E2M1
 
-        self.MANTISSA_BUCKETS = self.MANTISSA_BUCKETS.to(tensor.dtype).to(tensor.device)
-        m_quantized = self.MANTISSA_BUCKETS[torch.bucketize(m, self.MANTISSA_BUCKETS)]
+        # because 1 bit fractional, rotate right by multiplying 2^1, round to nearest integer, then rotate left by dividing 2^1, we get final significand
+        m_quantized = (m*2).round()/2
 
         # Reconstruct value in input datatype
         # FP4-E2M1 = (-1)^sign * 2**e * m_quantized
