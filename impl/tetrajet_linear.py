@@ -46,7 +46,29 @@ class TetraJetLinear(torch.nn.Linear):
     def __init__(self, in_features, out_features, bias = True, device=None, dtype=None):
         super().__init__(in_features, out_features, bias, device, dtype)
         self.CastMXFP4 = MXFP4Simulator(ScalerImpl.TetraJet)
+    
+    @classmethod
+    def from_linear(cls, linear_layer):
+        """Create a CustomLinear from an existing nn.Linear layer by reusing parameters."""
+        # Instantiate without running nn.Linear.__init__ of the class
+        tetrajet_linear = cls.__new__(cls)
+        # or super(cls, custom_linear).__init__()
+        
+        # We only want to run __init__ of Module base class 
+        # which nn.Linear is based from
+        torch.nn.Module.__init__(tetrajet_linear)
 
+        tetrajet_linear.in_features = linear_layer.in_features
+        tetrajet_linear.out_features = linear_layer.out_features
+        
+        # Reuse the same parameter tensors (no copying considering large model, just reference)
+        # We need to register them as parameters
+        tetrajet_linear.register_parameter('weight', linear_layer.weight)
+        tetrajet_linear.register_parameter('bias', linear_layer.bias)
+        
+        tetrajet_linear.CastMXFP4 = MXFP4Simulator(ScalerImpl.TetraJet)
+        return tetrajet_linear
+    
     def forward(self, input):
         n_dim = len(input.shape)
         if n_dim == 3:
