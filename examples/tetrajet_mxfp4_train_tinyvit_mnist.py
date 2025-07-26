@@ -6,7 +6,8 @@ from torchvision import datasets, transforms
 from tqdm import tqdm
 
 from models.vit import TinyViT
-from impl.tetrajet_linear import TetraJetLinear
+from impl.fp4_linear import FP4Linear
+from impl.recipe import tetrajet_recipe
 
 # ── 1. Hyper-params ────────────────────────────────────────────────────────────
 BATCH_SIZE   = 64
@@ -27,8 +28,17 @@ train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True)
 test_loader  = DataLoader(test_ds,  batch_size=BATCH_SIZE)
 
 # ── 3. Model ───────────────────────────────────────────────────────────────────
+def replace_linear_with_fp4(model):
+    """Recursively replace nn.Linear with FP4Linear in the model."""
+    for name, module in model.named_children():
+        if isinstance(module, nn.Linear) and '_proj' in name:
+            setattr(model, name, FP4Linear.from_linear(module, tetrajet_recipe))
+        else:
+            replace_linear_with_fp4(module)
 
-model = TinyViT(linear_ctor=TetraJetLinear).to(DEVICE)
+model = TinyViT().to(DEVICE)
+replace_linear_with_fp4(model)
+
 optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 print(model)
 criterion = nn.CrossEntropyLoss()
