@@ -68,7 +68,7 @@ class TestGetE8M0Scaler:
 
         scaler = sim_mxfp4.get_e8m0_scaler(tensor)
 
-        assert torch.allclose(scaler.squeeze().t(), torch.tensor(expected, dtype=torch.float32))
+        assert torch.allclose(scaler.squeeze().T, torch.tensor(expected, dtype=torch.float32))
 
 
 class TestSimulateMXFP4:

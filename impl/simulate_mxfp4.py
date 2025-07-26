@@ -93,7 +93,7 @@ class MXFP4Simulator:
         
         # standardize to block by the last axis
         if blocking_dim == Blocking.COLWISE:
-            tensor = tensor.t()        
+            tensor = tensor.T        
 
         # reshape tensor to (r, c/K, K) for blocking
         r, c = tensor.shape
@@ -122,7 +122,7 @@ class MXFP4Simulator:
         emulated_tensor = emulated_tensor.view(r, -1) # relayout as original
 
         if blocking_dim == Blocking.COLWISE:
-            emulated_tensor = emulated_tensor.t()
+            emulated_tensor = emulated_tensor.T
 
         return emulated_tensor    
 

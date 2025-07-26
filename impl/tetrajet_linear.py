@@ -8,7 +8,7 @@ class TetraJetMatMul(torch.autograd.Function):
         # assume W following layout of nn.Linear, i.e. OCxIC
 
         fq_X = CastMXFP4(X, Blocking.ROWWISE)
-        fq_Wt = CastMXFP4(W.t(), Blocking.COLWISE)
+        fq_Wt = CastMXFP4(W.T, Blocking.COLWISE)
 
         fq_Y = torch.matmul(fq_X, fq_Wt)
 
@@ -33,7 +33,7 @@ class TetraJetMatMul(torch.autograd.Function):
         
         if ctx.needs_input_grad[1] is True:
             fq_grad_W = torch.matmul(
-                            ctx.CastMXFP4(grad_Y.view(-1, grad_Y.shape[-1]).t(), Blocking.ROWWISE), 
+                            ctx.CastMXFP4(grad_Y.view(-1, grad_Y.shape[-1]).T, Blocking.ROWWISE), 
                             ctx.CastMXFP4(X.view(-1, X.shape[-1]), Blocking.COLWISE))
 
         if ctx.has_bias and ctx.needs_input_grad[2] is True:
