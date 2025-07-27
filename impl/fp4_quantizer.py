@@ -1,12 +1,7 @@
 import torch
 from dataclasses import dataclass
 from typing import ClassVar
-from impl.recipe import QuantFormat, ScaleImpl, BlockAxis, QuantConfig
-
-# TODO: how to disable autodiff? do we need?
-# TODO: EPS?
-
-# quantizer_factory.py
+from impl.recipe import QuantFormat, ScaleImpl, BlockAxis, QuantConfig, Rounding
 from typing import Type
 
 class QuantizerRegistry:
@@ -23,7 +18,7 @@ class QuantizerRegistry:
     def create(cls, qcfg):
         """
         Look up qformat in the registry
-        and instantiate with cfg.
+        and instantiate quantizer with cfg.
         """
         try:
             QConstructor = cls._registry[qcfg.quant_format.value]
@@ -69,6 +64,10 @@ class MXFP4Simulator:
         if tensor.dtype not in [torch.float32, torch.bfloat16]:
             raise ValueError("Tensor must be of type FP32 or BF16")
 
+        eps = torch.finfo(tensor.dtype).eps
+        # we use clamp_(min=eps) to achive in-place effect, 
+        # instead of torch.max( tensor.abs(), eps )
+
         absmax = tensor.abs().max(-1, keepdim=True).values
 
         match self.scale_impl:
@@ -76,12 +75,12 @@ class MXFP4Simulator:
                 # OCP MX baseline
                 scale_exponent = torch.floor_( 
                                     torch.log2_( 
-                                        absmax.div_(self.MAX_POWER_OF_TWO)))
+                                        absmax.div_(self.MAX_POWER_OF_TWO).clamp_(min=eps)))
             
             case ScaleImpl.TetraJet:
                 scale_exponent = torch.ceil_(
                                     torch.log2_( 
-                                        absmax.mul_(2).div_(self.MAX_VAL-self.MIN_VAL)))
+                                        absmax.mul_(2).div_(self.MAX_VAL-self.MIN_VAL).clamp_(min=eps)))
 
             case ScaleImpl.FP4_All_The_Way:
                 raise NotImplementedError
@@ -92,11 +91,14 @@ class MXFP4Simulator:
             #                         torch.log2_(
             #                             absmax.div_(self.MAX_VAL)))
 
+            case ScaleImpl.Nvidia_To_Infinity:
+                scale_exponent = torch.ceil_(
+                                    torch.log2_(
+                                        absmax.div_(self.MAX_VAL).clamp_(min=eps)))
             case _:
                 raise NotImplementedError(f"No default impl: {impl}")
         
         scale_exponent.clamp_(self.SCALE_E_MIN, self.SCALE_E_MAX)
-        
         scale = scale_exponent.exp2_()
         return scale #power of two value
 
@@ -129,14 +131,26 @@ class MXFP4Simulator:
         # remove sign from scaled_tensor 
         scaled_tensor = scaled_tensor.abs()
 
-        # find E2 (note we that we avoid redundant bias by baking in bias beforehand)
-        e = torch.floor(torch.log2(scaled_tensor)).clamp(self.SCALE_E_MIN, self.SCALE_E_MAX)
+        eps = torch.finfo(scaled_tensor.dtype).eps
+        
+        # find E2 (note that we avoid redundant bias by baking in the bias)
+        e = torch.floor(torch.log2(scaled_tensor.clamp_(min=eps))).clamp(self.SCALE_E_MIN, self.SCALE_E_MAX)
 
         # find M1
-        m = (scaled_tensor / (2**e)).clamp(self.M_MIN, self.M_MAX) # mantissa can only be 0, 0.5, 1.0, 1.5 for FP4-E2M1
+        m = (scaled_tensor / (2**e))
+        
+        match self.rounding:
+            case Rounding.Nearest:
+                # Do nothing, round to nearest is common final step for all rounding modes,
+                # putting round at the end
+                pass
+            case Rounding.Stochastic:
+                noise = torch.rand_like(m) - 0.5
+                m += noise
 
         # because 1 bit fractional, rotate right by multiplying 2^1, round to nearest integer, then rotate left by dividing 2^1, we get final significand
-        m_quantized = (m*2).round()/2
+        m_quantized = ( (m*2).round()/2 ).clamp(self.M_MIN, self.M_MAX)
+        # mantissa can only be 0, 0.5, 1.0, 1.5 for FP4-E2M1
 
         # Reconstruct value in input datatype
         # FP4-E2M1 = (-1)^sign * 2**e * m_quantized

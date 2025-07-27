@@ -24,6 +24,7 @@ class ScaleImpl(StrEnum):
     MX = auto()
     TetraJet = auto()
     FP4_All_The_Way = auto()
+    Nvidia_To_Infinity = auto()
 
 class Rounding(StrEnum):
     Nearest = auto()
@@ -172,6 +173,30 @@ def create_tetrajet_recipe():
     # tetrajet_recipe.freeze()
     return tetrajet_recipe
 
+def create_nvidia_round_to_infinity_recipe():
+    mxfp4 = QuantFormat.MXFP4
+    rounding = Rounding.Nearest
+    scale = ScaleImpl.Nvidia_To_Infinity
+
+    nvidia_recipe = RecipeConfig(
+        name = "Nvidia_Round_to_Infinity", 
+        quant_format = mxfp4,
+        quant_fwd_matmul = True,
+        fwd_x = QuantConfig(mxfp4, BlockAxis.RowWise, rounding, scale),
+        fwd_wt = QuantConfig(mxfp4, BlockAxis.ColWise, rounding, scale),
+        quant_bwd_grad_x_matmul = True,
+        bwd_grad_y = QuantConfig(mxfp4, BlockAxis.RowWise, rounding, scale),
+        bwd_w = QuantConfig(mxfp4, BlockAxis.ColWise, rounding, scale),
+        quant_bwd_grad_w_matmul= True,
+        bwd_grad_yt = QuantConfig(mxfp4, BlockAxis.RowWise, rounding, scale),
+        bwd_x = QuantConfig(mxfp4, BlockAxis.ColWise, rounding, scale),
+        double_quantization=False
+        )
+
+    nvidia_recipe.validate_quant_config()
+    # mx_recipe.freeze()
+    return nvidia_recipe
+
 def create_fp4_all_the_way_recipe():
     nvfp4 = QuantFormat.NVFP4
     habanalab_scale = ScaleImpl.FP4_All_The_Way
@@ -199,8 +224,11 @@ def create_fp4_all_the_way_recipe():
 mx_baseline_recipe = create_mx_baseline_recipe()
 tetrajet_recipe = create_tetrajet_recipe()
 fp4_all_the_way_recipe = create_fp4_all_the_way_recipe()
+nvidia_round_to_infinity_recipe = create_nvidia_round_to_infinity_recipe()
 
 if __name__ == "__main__":
+    mx_baseline = create_mx_baseline_recipe()
     tetrajet = create_tetrajet_recipe()
     fp4_all_the_way = create_fp4_all_the_way_recipe()
+    nvidia_recipe = create_nvidia_round_to_infinity_recipe()
     print("end.")
