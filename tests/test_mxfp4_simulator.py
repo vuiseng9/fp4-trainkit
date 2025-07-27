@@ -1,6 +1,6 @@
 import torch
-from impl.fp4_quantizer import MXFP4Simulator
-from impl.recipe import QuantConfig, QuantFormat, ScaleImpl, BlockAxis, Rounding
+from fp4tk.quantizer import MXFP4Simulator
+from fp4tk.recipe import QuantConfig, QuantFormat, ScaleImpl, BlockAxis, Rounding
 import pytest
 import numpy as np
  

@@ -1,7 +1,7 @@
 import torch
 from dataclasses import dataclass
 from typing import ClassVar
-from impl.recipe import QuantFormat, ScaleImpl, BlockAxis, QuantConfig, Rounding
+from fp4tk.recipe import QuantFormat, ScaleImpl, BlockAxis, QuantConfig, Rounding
 from typing import Type
 
 class QuantizerRegistry:
@@ -54,7 +54,7 @@ class MXFP4Simulator:
         return self.emulate(tensor)
 
     def __repr__(self):
-        return f"{__class__.__name__}(scale impl.: {self.scale_impl}, {self.block_axis.name} blocking, {self.rounding.name} rounding)"
+        return f"{__class__.__name__}(scale fp4tk.: {self.scale_impl}, {self.block_axis.name} blocking, {self.rounding.name} rounding)"
 
     def get_e8m0_scale(self, tensor):
         # calculate E8M0-emulated scale

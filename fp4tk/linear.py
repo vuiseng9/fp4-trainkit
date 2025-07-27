@@ -1,9 +1,9 @@
 import torch
 from collections import OrderedDict
 
-from impl.recipe import RecipeConfig
-from impl.fp4_matmul import FP4MatMul
-from impl.fp4_quantizer import QuantizerRegistry
+from fp4tk.recipe import RecipeConfig
+from fp4tk.matmul import FP4MatMul
+from fp4tk.quantizer import QuantizerRegistry
 
 
 class FP4Linear(torch.nn.Linear):

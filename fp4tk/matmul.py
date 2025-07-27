@@ -1,5 +1,5 @@
 import torch
-from impl.recipe import RecipeConfig
+from fp4tk.recipe import RecipeConfig
 from collections import OrderedDict
 
 class FP4MatMul(torch.autograd.Function):

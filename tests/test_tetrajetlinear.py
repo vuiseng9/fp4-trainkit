@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from impl.fp4_linear import FP4Linear
-from impl.recipe import tetrajet_recipe
+from fp4tk.linear import FP4Linear
+from fp4tk.recipe import tetrajet_recipe
 import pytest
 
 @pytest.fixture

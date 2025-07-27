@@ -1,10 +1,10 @@
-# fp4-training-kit
+# fp4-trainkit
 
 
 ### Install
 ```bash
-git clone https://github.com/vuiseng9/fp4-training-kit
-cd fp4-training-kit
+git clone https://github.com/vuiseng9/fp4-trainkit
+cd fp4-trainkit
 pip install -e .
 ```
 

@@ -6,8 +6,8 @@ from torchvision import datasets, transforms
 from tqdm import tqdm
 
 from models.vit import TinyViT
-from impl.fp4_linear import FP4Linear
-from impl.recipe import tetrajet_recipe, fp4_all_the_way_recipe, mx_baseline_recipe, nvidia_round_to_infinity_recipe
+from fp4tk.linear import FP4Linear
+from fp4tk.recipe import tetrajet_recipe, fp4_all_the_way_recipe, mx_baseline_recipe, nvidia_round_to_infinity_recipe
 
 # ── 1. Hyper-params ────────────────────────────────────────────────────────────
 BATCH_SIZE   = 64
