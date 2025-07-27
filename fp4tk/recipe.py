@@ -221,14 +221,18 @@ def create_fp4_all_the_way_recipe():
     
     return fp4alltheway_recipe
 
-mx_baseline_recipe = create_mx_baseline_recipe()
-tetrajet_recipe = create_tetrajet_recipe()
-fp4_all_the_way_recipe = create_fp4_all_the_way_recipe()
-nvidia_round_to_infinity_recipe = create_nvidia_round_to_infinity_recipe()
+
+# Create default recipes
+FP4_RECIPES = {
+    "mx_baseline":              create_mx_baseline_recipe(),
+    "tetrajet":                 create_tetrajet_recipe(),
+    "nvidia_round_to_infinity": create_nvidia_round_to_infinity_recipe(),
+    "fp4_all_the_way":          create_fp4_all_the_way_recipe()
+}
 
 if __name__ == "__main__":
-    mx_baseline = create_mx_baseline_recipe()
-    tetrajet = create_tetrajet_recipe()
-    fp4_all_the_way = create_fp4_all_the_way_recipe()
-    nvidia_recipe = create_nvidia_round_to_infinity_recipe()
+    mx_baseline     = FP4_RECIPES["mx_baseline"]
+    tetrajet        = FP4_RECIPES["tetrajet"]
+    fp4_all_the_way = FP4_RECIPES["fp4_all_the_way"]
+    nvidia_recipe   = FP4_RECIPES["nvidia_round_to_infinity"]
     print("end.")

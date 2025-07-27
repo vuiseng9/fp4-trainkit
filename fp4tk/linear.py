@@ -60,9 +60,10 @@ class FP4Linear(torch.nn.Linear):
         
     def extra_repr(self) -> str:
         repr_str = super().extra_repr()
-        repr_str += f"\nFP4 Recipe: {self.recipe.name}"
+        repr_str += f"\n* FP4 Recipe          : {self.recipe.name}"
+        repr_str += f"\n* Double Quantization : {self.recipe.double_quantization}"
         for i, (qname, q) in enumerate(self.quantizers.items()):
-            repr_str += f"\n  Q{i}( {qname:<12}): {q}"
+            repr_str += f"\n  Q{i}( {qname:<15}): {q}"
         return repr_str
 
         # + f",\n{self.quantizers}"
