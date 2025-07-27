@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from fp4tk.linear import FP4Linear
-from fp4tk.recipe import tetrajet_recipe
+from fp4tk.recipe import FP4_RECIPES
 import pytest
 
 @pytest.fixture
@@ -28,7 +28,7 @@ class TestTetraJetLinear:
         for in_features, out_features, has_bias in linear_configs:
             ref_linear = nn.Linear(in_features, out_features, bias=has_bias)
 
-            tetrajet_linear = FP4Linear.from_linear(ref_linear, tetrajet_recipe)
+            tetrajet_linear = FP4Linear.from_linear(ref_linear, FP4_RECIPES["tetrajet"])
 
             # Test with different batch sizes and sequence lengths
             for i, input_tensor in enumerate(test_inputs(in_features)):
@@ -44,7 +44,7 @@ class TestTetraJetLinear:
         for in_features, out_features, has_bias in linear_configs:
 
             ref_linear = nn.Linear(in_features, out_features, bias=has_bias)
-            tetrajet_linear = FP4Linear.from_linear(ref_linear, tetrajet_recipe)
+            tetrajet_linear = FP4Linear.from_linear(ref_linear, FP4_RECIPES["tetrajet"])
 
             input_tensor = torch.randn(64, in_features, requires_grad=True)
             input_tensor_copy = input_tensor.clone().detach().requires_grad_(True)

@@ -3,7 +3,7 @@ from collections import OrderedDict
 
 from fp4tk.recipe import RecipeConfig
 from fp4tk.matmul import FP4MatMul
-from fp4tk.quantizer import QuantizerRegistry
+from fp4tk.quantizer.registry import QuantizerRegistry
 
 
 class FP4Linear(torch.nn.Linear):
