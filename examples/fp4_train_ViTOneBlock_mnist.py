@@ -18,7 +18,7 @@ def parse_args():
                         help='Batch size for training (default: 64)')
     parser.add_argument('--epochs', type=int, default=3,
                         help='Number of epochs to train (default: 3)')
-    parser.add_argument('--lr', '--learning-rate', type=float, default=1e-3,
+    parser.add_argument('--lr', '--learning-rate', type=float, default=3e-4,
                         help='Learning rate (default: 1e-3)')
     parser.add_argument('--device', type=str, default=None,
                         help='Device to use (cuda/cpu). Auto-detect if not specified')

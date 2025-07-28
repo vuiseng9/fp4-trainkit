@@ -4,21 +4,26 @@ from typing import ClassVar
 from fp4tk.recipe import QuantFormat, ScaleImpl, BlockAxis, QuantConfig, Rounding
 from fp4tk.quantizer import QuantizerRegistry
 
-@QuantizerRegistry.register(QuantFormat.MXFP4.value)
+#TODO
+# two level scaling as described in
+# https://developer.nvidia.com/blog/introducing-nvfp4-for-efficient-and-accurate-low-precision-inference/
+# Current implementation is only single level of scaling, i.e. one E4M3 scale per 16-element block
+
+@QuantizerRegistry.register(QuantFormat.NVFP4.value)
 @dataclass
-class MXFP4Simulator:
+class NVFP4Simulator:
     # Class‑level constant (not an __init__ field)
-    K: ClassVar[int] = 32 # block size
-    E_MIN: ClassVar[int] = 0 # lower of exponent range
-    E_MAX: ClassVar[int] = 2 # upper of exponent range
+    K: ClassVar[int] = 16 # block size
+    E_MIN: ClassVar[int] = 0 # post exponent biasing
+    E_MAX: ClassVar[int] = 2 # post exponent biasing
     MAX_POWER_OF_TWO: ClassVar[int] = 2 ** E_MAX # 2^(3-1)
     MIN_VAL: ClassVar[float] = -6.0 # -1 x 2^E_MAX × base2(1.1)
     MAX_VAL: ClassVar[float] =  6.0 # +1 x 2^E_MAX × base2(1.1)
     M_MIN: ClassVar[float] = 0.0
     M_MAX: ClassVar[float] = 1.5
 
-    SCALE_E_MIN: ClassVar[int] = -127 # lower of exponent range
-    SCALE_E_MAX: ClassVar[int] =  127 # upper of exponent range
+    SCALE_MIN_VAL: ClassVar[int] = 2**-9
+    SCALE_MAX_VAL: ClassVar[int] = 448
 
     quant_config: QuantConfig
     
@@ -33,8 +38,8 @@ class MXFP4Simulator:
     def __repr__(self):
         return f"{__class__.__name__}(scale impl.: {self.scale_impl}, {self.block_axis.name} blocking, {self.rounding.name} rounding)"
 
-    def get_e8m0_scale(self, tensor):
-        # calculate E8M0-emulated scale
+    def get_e4m3_scale(self, tensor):
+        # calculate E4M3-emulated scale
         if tensor.shape[-1] != self.K:
             raise ValueError(f"Last dimension of tensor must be equal to block size K={self.K}")
 
@@ -48,37 +53,27 @@ class MXFP4Simulator:
         absmax = tensor.abs().max(-1, keepdim=True).values
 
         match self.scale_impl:
-            case ScaleImpl.MX:
-                # OCP MX baseline
-                scale_exponent = torch.floor_( 
-                                    torch.log2_( 
-                                        absmax.div_(self.MAX_POWER_OF_TWO).clamp_(min=eps)))
-            
-            case ScaleImpl.TetraJet:
-                scale_exponent = torch.ceil_(
-                                    torch.log2_( 
-                                        absmax.mul_(2).div_(self.MAX_VAL-self.MIN_VAL).clamp_(min=eps)))
-
             case ScaleImpl.FP4_All_The_Way:
-                raise NotImplementedError(f"{self.scale_impl} scale impl. is intended for NVFP4, not MXFP4. Use NVFP4Simulator instead.")
+                # PyTorch doesn’t support E8M0 (used in MXFP4), but does support E4M3. We use torch casting here.
+                # Downcast the scale to float8 (E4M3), then convert it back to the original dtype.
+                scale = (absmax/self.MAX_VAL).clamp(self.SCALE_MIN_VAL, self.SCALE_MAX_VAL) 
+                scale = scale.to(torch.float8_e4m3fn).to(scale.dtype)
 
-            case ScaleImpl.Nvidia_To_Infinity:
-                scale_exponent = torch.ceil_(
-                                    torch.log2_(
-                                        absmax.div_(self.MAX_VAL).clamp_(min=eps)))
+            case ScaleImpl.MX | ScaleImpl.TetraJet | ScaleImpl.Nvidia_To_Infinity:
+                raise NotImplementedError(f"{self.scale_impl} scale impl. is intended for MXFP4, not NVFP4. Use MXFP4Simulator instead.")
+            
             case _:
                 raise NotImplementedError(f"No default impl: {impl}")
         
-        scale_exponent.clamp_(self.SCALE_E_MIN, self.SCALE_E_MAX)
-        scale = scale_exponent.exp2_()
-        return scale #power of two value
+        return scale
+        
 
     def emulate(self, tensor):        
         if tensor.dtype not in [torch.float32, torch.bfloat16]:
             raise ValueError("Tensor must be of type FP32 or BF16")
 
         if len(tensor.shape) != 2:
-            raise ValueError(f"Tensor must be 2D for MXFP4 emulation, current shape: {tensor.shape}")
+            raise ValueError(f"Tensor must be 2D for NVFP4 emulation, current shape: {tensor.shape}")
         
         if self.block_axis.value not in [0, 1]:
             raise ValueError(f"channel axis for blocking must be 0 (rows) or 1 (columns), current axis: {self.block_axis}")
@@ -93,7 +88,7 @@ class MXFP4Simulator:
         # reshape tensor to (r, c/K, K) for blocking
         r, c = tensor.shape
         tensor = tensor.view(r, -1, self.K)
-        scale = self.get_e8m0_scale(tensor)
+        scale = self.get_e4m3_scale(tensor)
         
         # scaled tensor 
         scaled_tensor = tensor / scale
@@ -106,6 +101,7 @@ class MXFP4Simulator:
         
         # find E2 (note that we avoid redundant bias by baking in the bias)
         e = torch.floor(torch.log2(scaled_tensor.clamp_(min=eps))).clamp(self.E_MIN, self.E_MAX)
+
         # find M1
         m = (scaled_tensor / (2**e))
         
@@ -135,8 +131,8 @@ class MXFP4Simulator:
 
 if __name__ == "__main__":
     from fp4tk.recipe import QuantFormat, Rounding, ScaleImpl
-    qcfg = QuantConfig(QuantFormat.MXFP4, BlockAxis.RowWise, Rounding.Nearest, ScaleImpl.MX)
-    mxfp4 = MXFP4Simulator(qcfg)
-    tensor = torch.ones(4, 64)*33
-    res_mx = mxfp4(tensor)
+    qcfg = QuantConfig(QuantFormat.NVFP4, BlockAxis.RowWise, Rounding.Nearest, ScaleImpl.FP4_All_The_Way)
+    nvfp4 = NVFP4Simulator(qcfg)
+    tensor = torch.ones(4, 64)*25
+    res_mx = nvfp4(tensor)
     print("end.")
