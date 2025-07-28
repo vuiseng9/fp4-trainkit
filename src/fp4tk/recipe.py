@@ -209,7 +209,7 @@ def create_fp4_all_the_way_recipe():
         fwd_wt = QuantConfig(nvfp4, BlockAxis.ColWise, Rounding.Nearest, habanalab_scale),
         quant_bwd_grad_x_matmul = True,
         bwd_grad_y = QuantConfig(nvfp4, BlockAxis.RowWise, Rounding.Stochastic, habanalab_scale),
-        bwd_w = QuantConfig(nvfp4, BlockAxis.ColWise, Rounding.Stochastic, habanalab_scale),
+        bwd_w = QuantConfig(nvfp4, BlockAxis.ColWise, Rounding.Nearest, habanalab_scale),
         quant_bwd_grad_w_matmul= True,
         bwd_grad_yt = QuantConfig(nvfp4, BlockAxis.RowWise, Rounding.Stochastic, habanalab_scale),
         bwd_x = QuantConfig(nvfp4, BlockAxis.ColWise, Rounding.Stochastic, habanalab_scale),
