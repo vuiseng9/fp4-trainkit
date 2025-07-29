@@ -7,8 +7,7 @@ from torchvision import datasets, transforms
 from tqdm import tqdm
 
 from models.vit import ViTOneBlock
-from fp4tk.utils import FP4LinearConverter
-from fp4tk.recipe import FP4_RECIPES
+from fp4tk import FP4LinearConverter, FP4_RECIPES
 
 def parse_args():
     """Parse command line arguments."""
@@ -18,7 +17,7 @@ def parse_args():
                         help='Batch size for training (default: 64)')
     parser.add_argument('--epochs', type=int, default=3,
                         help='Number of epochs to train (default: 3)')
-    parser.add_argument('--lr', '--learning-rate', type=float, default=3e-4,
+    parser.add_argument('--lr', '--learning-rate', type=float, default=1e-3,
                         help='Learning rate (default: 1e-3)')
     parser.add_argument('--device', type=str, default=None,
                         help='Device to use (cuda/cpu). Auto-detect if not specified')
@@ -58,8 +57,7 @@ def main():
 
     model = ViTOneBlock().to(DEVICE)
     print(model)
-    converter = FP4LinearConverter()
-    converter.apply(model, recipe=RECIPE, keywords=['_proj'], verbose=True)
+    FP4LinearConverter().apply(model, recipe=RECIPE, keywords=['_proj'], verbose=True)
     print(model)
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
     criterion = nn.CrossEntropyLoss()
