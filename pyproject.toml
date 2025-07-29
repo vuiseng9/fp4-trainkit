@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fp4-trainkit"
+version = "0.1.0"
+description = "Toolkit for Deep Learning Training in FP4 precision"
+authors = [
+    {name = "Vui Seng Chua"}
+]
+requires-python = ">=3.11"
+dependencies = [
+    "torch",
+    "tqdm"
+]
+dynamic = ["readme"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[tool.setuptools.packages.find]
+where  = ["src"]
+include = ["fp4tk", "fp4tk.*"]
+
+[tool.setuptools.dynamic]
+readme = {file = ["README.md"], content-type = "text/markdown"}

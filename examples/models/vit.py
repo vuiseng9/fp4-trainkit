@@ -8,7 +8,7 @@ USE_TORCHVISION_VIT = int(os.getenv('USE_TORCHVISION_VIT', 0))
 # 0: nn.TransformerEncoder
 # 1: TransformerBlock (Local custom implementation using nn.Linear etc.)
 
-class TinyViT(nn.Module):
+class ViTOneBlock(nn.Module):
     """
     ViT with only a single transformer block
     """
@@ -62,7 +62,7 @@ class TinyViT(nn.Module):
         else:
             raise ValueError("Invalid USE_TORCHVISION_VIT value. Must be 0 or 1.")
 
-        # (d) Classification head #NOTE: head is always nn.Linear
+        # (d) Classification head #NOTE: we always set head as nn.Linear, dont touch
         self.mlp_head = nn.Linear(embed_dim, num_classes)
 
     def forward(self, x):                       # x: (B,1,28,28)
