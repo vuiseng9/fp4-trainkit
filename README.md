@@ -133,7 +133,53 @@ Check available canned recipes with `python -c "import fp4tk; print(list(fp4tk.F
  
 ---
 ### Design
-Coming soon.
+
+The premise of low precision training is "*Speedups*" by mapping the heavy math in fewer bit representation where corresponding hardware runs faster. On FP4-supported HW, e.g. NVIDIA [Blackwell](https://nvdam.widen.net/s/wwnsxrhm2w/blackwell-datasheet-3384703) and AMD CDNA 4 ([MI350X](https://www.amd.com/content/dam/amd/en/documents/instinct-tech-docs/product-briefs/amd-instinct-mi350x-platform-brochure.pdf)), FP4 matmul peak throughput is about **2×** of FP8, **4×** over FP/BF16.
+
+Most modern models are Transformers. The main workhorses are linear projections and attentions which are fundamentally matrix multiplications (matmuls). If we can execute these matmuls on the new FP4 units, we get speedups in training (inference too).
+
+In practice, not all operations in transformer can be pushed to low precision. Optimizers, normalization, softmax, and others stay in higher precision for stability. Thus, most research and practioners target the linear layers first. In this repo, “**FP4 training**” means mapping the linear layer compute to FP4, while keeping the rest in FP32/BF16 as needed. Currently, we *simulate* FP4 on standard GPUs/CPUs using FP32/BF16 computation, so we can experiment without FP4 hardware.
+
+There are 3 matmuls in Linear layer to map onto FP4, concretely:
+
+* **MatMul 1** for computing forward pass of linear layer:
+   
+   &emsp; $Y = X W^{T}$ &emsp; where input $X$ is $(N, IC)$, weights $W$ is $(OC, IC)$ following `torch` layout, and output $Y$ is $(N, OC)$. For brevity, Transformer's batch size and sequence length are collapsed into $N$.
+
+* **MatMul 2** in the backward pass for computing **gradient w.r.t. inputs** :
+
+   &emsp; $\frac{\partial L}{\partial X} = \frac{\partial L}{\partial Y}\frac{\partial Y}{\partial X} =GW$ &emsp; where $G = \frac{\partial L}{\partial Y}$, is $(N, OC)$, the backprop incoming gradient. $\frac{\partial L}{\partial X}$ has shape of $(N, IC)$ 
+
+* **MatMul 3** in the backward pass for computing **gradient w.r.t. weights**:
+
+   &emsp; $\frac{\partial L}{\partial W} = \frac{\partial L}{\partial Y}\frac{\partial Y}{\partial W} =G^{T}X$ &emsp; where $\frac{\partial L}{\partial W}$ has the same shape as $W$, $(OC, IC)$
+
+
+Essentially, $X, W, G$ must be quantized to FP4 before we feed them to the matrix engines. To minimize distortion, quantization is done block by block, i.e. groups of contiguous `K` elements within each channel. Microscaling (MXFP4) uses `K=32`, NVFP4 uses `K=16`. Per HW requirements, we quantize along the matmul contraction axis, the dimension that is multiplied and summed. E.g. matmul of `A @ B`, this means `A` is block quantized row wise and `B` is block quantized column wise.
+
+*..To add diagram, coming soon..*
+
+Note that $W$ and $X$ appear in both forward and backward pass, but the required quantization axis flips between those matmuls. The simple approach is to keep an FP32/BF16 master copy and quantize separately for each pass. An alternative is double quantization: requantize an already‑(de)quantized tensor along the other axis. This repo supports both options, since both variants appear in prior work.
+
+**Rounding.** We support two policies: `RTN` (round to nearest) and `SR` (stochastic rounding). `RTN` is fast, deterministic, and a good default, but round to nearest can introduce bias when quantizing gradients. Research has come up with `SR` quantization for backward pass, resulting in unbiased gradient and improves training stability. In our design, rounding is parameterized per quantizer to accommodate different choices: some recipes quantize only the backward path, others mix `RTN` in the forward path with `SR` on selected gradients.
+
+The parameterization above manifests as `RecipeConfig` and `QuantConfig`. See `recipe.py` for canned recipes. e.g. , `mx_baseline` is configured as 
+```
+RecipeConfig(
+	name                      = 'MXFP4_Baseline'
+	quant_format              = <QuantFormat.MXFP4: 'mxfp4'>
+	quant_fwd_matmul          = True
+	fwd_x                     = QuantConfig(MXFP4, RowWise, Nearest Round, MX Scale Impl.)
+	fwd_wt                    = QuantConfig(MXFP4, ColWise, Nearest Round, MX Scale Impl.)
+	quant_bwd_grad_x_matmul   = True
+	bwd_grad_y                = QuantConfig(MXFP4, RowWise, Nearest Round, MX Scale Impl.)
+	bwd_w                     = QuantConfig(MXFP4, ColWise, Nearest Round, MX Scale Impl.)
+	quant_bwd_grad_w_matmul   = True
+	bwd_grad_yt               = QuantConfig(MXFP4, RowWise, Nearest Round, MX Scale Impl.)
+	bwd_x                     = QuantConfig(MXFP4, ColWise, Nearest Round, MX Scale Impl.)
+	double_quantization       = False
+)
+```
 
 ---
 ### References
