@@ -133,6 +133,8 @@ Check available canned recipes with `python -c "import fp4tk; print(list(fp4tk.F
  
 ---
 ### Design
+![](./docs/low-fp-gemm.png)
+> $Q_{inner_dim}^{rounding}$ is FP4 quantizer configurable in blocking axis, rounding mode, as well as scale implementation (not shown). Simulated FP4 means output of $Q$ is dequantized back to FP32/BF16 for the matmul (not shown as well). 
 
 The premise of low precision training is "*Speedups*" by mapping the heavy math in fewer bit representation where corresponding hardware runs faster. On FP4-supported HW, e.g. NVIDIA [Blackwell](https://nvdam.widen.net/s/wwnsxrhm2w/blackwell-datasheet-3384703) and AMD CDNA 4 ([MI350X](https://www.amd.com/content/dam/amd/en/documents/instinct-tech-docs/product-briefs/amd-instinct-mi350x-platform-brochure.pdf)), FP4 matmul peak throughput is about **2×** of FP8, **4×** over FP/BF16.
 
@@ -157,7 +159,7 @@ There are 3 matmuls in Linear layer to map onto FP4, concretely:
 
 Essentially, $X, W, G$ must be quantized to FP4 before we feed them to the matrix engines. To minimize distortion, quantization is done block by block, i.e. groups of contiguous `K` elements within each channel. Microscaling (MXFP4) uses `K=32`, NVFP4 uses `K=16`. Per HW requirements, we quantize along the matmul contraction axis, the dimension that is multiplied and summed. E.g. matmul of `A @ B`, this means `A` is block quantized row wise and `B` is block quantized column wise.
 
-*..To add diagram, coming soon..*
+
 
 Note that $W$ and $X$ appear in both forward and backward pass, but the required quantization axis flips between those matmuls. The simple approach is to keep an FP32/BF16 master copy and quantize separately for each pass. An alternative is double quantization: requantize an already‑(de)quantized tensor along the other axis. This repo supports both options, since both variants appear in prior work.
 
